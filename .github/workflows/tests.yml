@@ -1,0 +1,91 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - master
+  # To run the action on a schedule, you can also add a scheduler
+  #
+  # "*"" is a special character in YAML so you have to quote this string
+  #
+  # schedule:
+  #   - cron:  '0 * * * *'
+  pull_request:
+
+jobs:
+  # Tests the PHPUnit test runner.
+  #
+  # Performs the following steps:
+  # - Cancels all previous workflow runs for pull requests that have not completed.
+  # - Checks out the repository.
+  # - Installs PHP.
+  # - Installs NodeJS 14.
+  # - Sets up caching for NPM.
+  # - Prepares the environment for tests.
+  # - Runs the tests.
+  # - Reports the results.
+  # - Cleans up.
+  test:
+    name: Test the runner
+    runs-on: ubuntu-latest
+
+    env:
+      # This is only a subset/example of env vars, see the `.env.default` file for the full list.
+      WPT_PREPARE_DIR: ${{ secrets.WPT_PREPARE_DIR }}
+      WPT_TEST_DIR: ${{ secrets.WPT_TEST_DIR }}
+      WPT_REPORT_API_KEY: ${{ secrets.WPT_REPORT_API_KEY }}
+      WPT_PHP_EXECUTABLE: ${{ secrets.WPT_PHP_EXECUTABLE }}
+      # db settings
+      WPT_DB_NAME: ${{ secrets.WPT_DB_NAME }}
+      WPT_DB_USER: ${{ secrets.WPT_DB_USER }}
+      WPT_DB_PASSWORD: ${{ secrets.WPT_DB_PASSWORD }}
+      WPT_DB_HOST: ${{ secrets.WPT_DB_HOST }}
+      # ssh settings
+      WPT_SSH_CONNECT: ${{ secrets.WPT_SSH_CONNECT }}
+      WPT_SSH_PRIVATE_KEY_BASE64: ${{ secrets.WPT_SSH_PRIVATE_KEY_BASE64 }}
+
+    steps:
+      - name: Cancel previous runs of this workflow (pull requests only)
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: styfle/cancel-workflow-action@0.8.0
+        with:
+          access_token: ${{ github.token }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          coverage: none
+
+      - name: Install NodeJS
+        uses: actions/setup-node@v2
+        with:
+          node-version: 14
+
+      - name: Cache NodeJS modules
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-node-modules
+        with:
+          # npm cache files are stored in `~/.npm` on Linux/macOS
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Prepare step
+        run: php prepare.php
+
+      - name: Run tests
+        run: php test.php
+        # Prevent GitHub Action to discontinue if PHPUnit runs into errors
+        continue-on-error: true
+
+      - name: Report tests
+        run: php report.php
+
+      - name: Cleanup
+        run: php cleanup.php
